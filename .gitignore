@@ -1,0 +1,80 @@
+# Node modules (MOST IMPORTANT - prevents 100MB+ upload)
+node_modules/
+*/node_modules/
+**/node_modules/
+
+# Environment files (CONTAINS PASSWORDS - NEVER COMMIT)
+.env
+.env.local
+.env.*.local
+.env.production
+*.env
+
+# Build outputs
+dist/
+build/
+*/dist/
+*/build/
+**/dist/
+**/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+logs/
+
+# Uploads folder (USER FILES - can be huge)
+uploads/
+*/uploads/
+**/uploads/
+
+# README text files
+random.txt
+readme_chayan.txt
+readme_zahra.txt
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*.swn
+*~
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Database files (if you have local SQLite)
+*.sqlite
+*.sqlite3
+*.db
+
+# Compiled files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so

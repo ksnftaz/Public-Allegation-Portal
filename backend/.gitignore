@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+
+# Environment variables (DATABASE PASSWORDS!)
+.env
+.env.local
+.env.production
+.env.test
+
+# Uploads folder (USER-UPLOADED FILES)
+uploads/
+uploads/*
+!uploads/.gitkeep
+
+# Logs
+*.log
+npm-debug.log*
+logs/
+
+# Build files
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Database dumps (if you export locally)
+*.sql.gz
+*.sql.zip
+backup/
+
+# Database files
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+project_db.sql
