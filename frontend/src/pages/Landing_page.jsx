@@ -188,7 +188,7 @@ export default function Landing_page() {
               <Link to="/anonymous_complaint" className="inline-flex items-center gap-3 bg-green-600 text-white px-6 py-3 rounded-md font-semibold shadow hover:bg-green-700 transition">
                 + Report an Allegation
               </Link>
-              {/* <Link to="/" className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition">Browse Organizations</Link> */}
+              <Link to="/browse_organizations" className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-slate-200 text-slate-700 hover:bg-slate-50 transition">Browse Organizations</Link>
             </div>
 
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">

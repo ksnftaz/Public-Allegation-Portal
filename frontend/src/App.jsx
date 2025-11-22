@@ -21,6 +21,7 @@ import Organization_profile from "./pages/Organization_profile";
 import Organization_settings from "./pages/Organization_settings";
 import Organization_notifications from "./pages/Organization_notifications";
 import Department_page from "./pages/Department_page";
+import Browse_organizations from "./pages/Browse_organizations";
 
 function PrivateRoute({ children }) {
   const token = getToken();
@@ -33,6 +34,7 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/" element={<Landing_page />} />
+        <Route path="/browse_organizations" element={<Browse_organizations />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/organization/:slug" element={<Organization_page />} />
