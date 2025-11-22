@@ -43,7 +43,7 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:5173',
+  'http://localhost:5000',
   'https://public-allegation-portal-five.vercel.app',  // Your Vercel URL
   // Add your custom domain here later if you have one
 ];
@@ -517,7 +517,7 @@ app.get("/api/organizations", async (req, res) => {
   }
 });
 
-app.post("/api/register/organization", upload.single("logo"), async (req, res) => {
+app.post("/register/organization", upload.single("logo"), async (req, res) => {
   try {
     const { orgName, orgType, email, address, description, password } = req.body || {};
     if (!orgName || !email || !address || !description || !password)
@@ -544,6 +544,41 @@ app.post("/api/register/organization", upload.single("logo"), async (req, res) =
     );
 
     return res.json({ success: true, message: "Organization registered successfully", slug });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// Also add route for user registration (if needed)
+app.post("/register/user", async (req, res) => {
+  try {
+    const { name, email, password, organizationId, address = null, description = null } = req.body || {};
+    if (!name || !email || !password || !organizationId)
+      return res.status(400).json({ success: false, message: "name, email, password, organizationId required" });
+
+    const [orgRows] = await db.query("SELECT id FROM organizations WHERE id=?", [organizationId]);
+    if (!orgRows.length) return res.status(404).json({ success: false, message: "Organization not found" });
+
+    const [exists] = await db.query("SELECT id FROM users WHERE email=?", [email]);
+    let userId;
+    if (exists.length) {
+      userId = exists[0].id;
+    } else {
+      const hash = await bcrypt.hash(password, 10);
+      const [ins] = await db.query(
+        "INSERT INTO users (name, email, password, address, description) VALUES (?, ?, ?, ?, ?)",
+        [name, email, hash, address, description]
+      );
+      userId = ins.insertId;
+    }
+
+    await db.query(
+      "INSERT IGNORE INTO user_organizations (user_id, org_id) VALUES (?, ?)",
+      [userId, organizationId]
+    );
+
+    return res.json({ success: true, message: "User registered to organization", userId });
   } catch (e) {
     console.error(e);
     res.status(500).json({ success: false, message: "Server error" });
