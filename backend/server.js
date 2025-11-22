@@ -44,7 +44,7 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
-  'https://allegation-portal.vercel.app',  // Your Vercel URL
+  'https://public-allegation-portal-five.vercel.app',  // Your Vercel URL
   // Add your custom domain here later if you have one
 ];
 
