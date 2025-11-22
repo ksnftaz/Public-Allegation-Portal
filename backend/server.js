@@ -2,6 +2,7 @@
 // ================================
 // Public Allegation Portal backend
 // ================================
+import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import mysql from "mysql2/promise";
@@ -19,6 +20,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- Config ---
+dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || "dev-only-change-this";
@@ -72,8 +74,7 @@ app.use(cors({
   exposedHeaders: ['Set-Cookie']
 }));
 
-// Handle preflight requests
-app.options('*', cors());
+
 
 // // Middleware
 
@@ -86,7 +87,7 @@ const db = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASS || "",
-  database: process.env.DB_NAME || "project",
+  database: process.env.DB_NAME || "railway",
   waitForConnections: true,
   connectionLimit: 10,
   
