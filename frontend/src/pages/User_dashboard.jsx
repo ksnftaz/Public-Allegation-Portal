@@ -38,7 +38,8 @@ import {
   CartesianGrid,
 } from "recharts";
 
-const API = "/api";
+// const API = "/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 function useAuthHeaders() {
   const token = useMemo(() => localStorage.getItem("token") || "", []);

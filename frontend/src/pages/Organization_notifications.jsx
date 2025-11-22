@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Bell, X, CheckCircle, AlertCircle, ArrowLeft, CheckCheck, Loader2, Clock, Building2, FileText } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 
-const API = "/api";
+// const API = "/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 function getToken() {
   try {

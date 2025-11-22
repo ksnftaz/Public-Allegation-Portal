@@ -3,7 +3,9 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FileText, UploadCloud, Loader2, ArrowLeft, ShieldCheck } from "lucide-react";
 
-const API = "/api";
+// const API = "/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
 const NONE_DEPARTMENT = "NONE_DEPARTMENT";
 
 // ---------- auth header helper ----------

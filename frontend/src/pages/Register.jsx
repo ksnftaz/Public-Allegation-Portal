@@ -2,7 +2,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
-const API = "/api";
+// const API = "/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // ============= VALIDATION UTILITIES =============
 const validateEmail = (email) => {

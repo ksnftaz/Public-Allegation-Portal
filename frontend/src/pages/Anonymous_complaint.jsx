@@ -3,7 +3,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { UploadCloud, Loader2, FileText, ArrowLeft, ShieldCheck } from "lucide-react";
 
-const API = "/api";
+const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+// const API = "/api";
 const NONE_DEPT = "NONE_DEPT";
 
 export default function Anonymous_complaint() {
