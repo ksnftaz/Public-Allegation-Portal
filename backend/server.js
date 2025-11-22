@@ -44,23 +44,36 @@ app.use("/uploads", express.static(UPLOAD_DIR));
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5000',
-  'https://public-allegation-portal-five.vercel.app',  // Your Vercel URL
-  // Add your custom domain here later if you have one
+  'https://public-allegation-portal-five.vercel.app',
+  'https://public-allegation-portal-five.vercel.app/',  // With trailing slash we need it too
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // Allow requests with no origin (mobile apps, Postman, server-to-server)
     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'CORS policy: This origin is not allowed.';
-      return callback(new Error(msg), false);
+    // Check if origin is in allowed list (supports both exact match and startsWith)
+    const isAllowed = allowedOrigins.some(allowed => 
+      origin === allowed || origin.startsWith(allowed.replace(/\/$/, ''))
+    );
+    
+    if (isAllowed) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    
+    const msg = `CORS policy: Origin ${origin} is not allowed.`;
+    console.error(msg);
+    return callback(new Error(msg), false);
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Anon-ID'],
+  exposedHeaders: ['Set-Cookie']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 // // Middleware
 
@@ -146,24 +159,50 @@ async function findOrgBySlug(slug) {
 
 app.post("/api/auth/login", async (req, res) => {
   try {
+    console.log('[POST /api/auth/login] Login attempt');
+    
     const { email, password } = req.body || {};
+    
+    // Validate input
     if (!email || !password) {
-      return res.status(400).json({ success: false, error: "Missing credentials" });
+      console.log('[POST /api/auth/login] Missing credentials');
+      return res.status(400).json({ 
+        success: false, 
+        error: "Email and password are required" 
+      });
     }
 
+    // Clean and normalize inputs
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanPassword = String(password).trim();
+
+    console.log(`[POST /api/auth/login] Checking email: ${cleanEmail}`);
+
+    // Check users table first
     const [uRows] = await db.query(
-      "SELECT id, name, email, password FROM users WHERE email=?",
-      [email]
+      "SELECT id, name, email, password FROM users WHERE LOWER(email) = ?",
+      [cleanEmail]
     );
-    if (uRows.length) {
+
+    if (uRows.length > 0) {
       const user = uRows[0];
-      const ok = await bcrypt.compare(password, user.password || "").catch(() => false);
-      if (ok) {
+      console.log(`[POST /api/auth/login] Found user: ${user.id}`);
+      
+      const isValid = await bcrypt.compare(cleanPassword, user.password || "")
+        .catch(err => {
+          console.error('[POST /api/auth/login] Bcrypt error:', err);
+          return false;
+        });
+      
+      if (isValid) {
+        console.log(`[POST /api/auth/login] User login successful: ${user.id}`);
+        
         const token = jwt.sign(
           { id: user.id, email: user.email, role: "user" },
           JWT_SECRET,
           { expiresIn: "180d" }
         );
+        
         return res.json({
           success: true,
           token,
@@ -172,22 +211,42 @@ app.post("/api/auth/login", async (req, res) => {
           redirect: "/user/dashboard",
         });
       }
+      console.log(`[POST /api/auth/login] Invalid password for user: ${user.id}`);
     }
 
+    // Check organizations table
     const [oRows] = await db.query(
-      "SELECT id, name, slug, email, password FROM organizations WHERE email=?",
-      [email]
+      "SELECT id, name, slug, email, password FROM organizations WHERE LOWER(email) = ?",
+      [cleanEmail]
     );
-    if (oRows.length) {
+
+    if (oRows.length > 0) {
       const org = oRows[0];
-      const okHash = await bcrypt.compare(password, org.password || "").catch(() => false);
-      const okPlain = !okHash && password && org.password && password === org.password;
-      if (okHash || okPlain) {
+      console.log(`[POST /api/auth/login] Found organization: ${org.id}`);
+      
+      // Try bcrypt first
+      const isValidHash = await bcrypt.compare(cleanPassword, org.password || "")
+        .catch(err => {
+          console.error('[POST /api/auth/login] Bcrypt error:', err);
+          return false;
+        });
+      
+      // Fallback to plain text (for testing only - remove in production)
+      const isValidPlain = !isValidHash && cleanPassword === org.password;
+      
+      if (isValidHash || isValidPlain) {
+        if (isValidPlain) {
+          console.warn('[POST /api/auth/login] WARNING: Plain text password match - hash this password!');
+        }
+        
+        console.log(`[POST /api/auth/login] Organization login successful: ${org.id}`);
+        
         const token = jwt.sign(
           { id: org.id, email: org.email, role: "organization" },
           JWT_SECRET,
-          { expiresIn: "7d" }
+          { expiresIn: "180d" }
         );
+        
         return res.json({
           success: true,
           token,
@@ -197,12 +256,23 @@ app.post("/api/auth/login", async (req, res) => {
           redirect: `/organization/${org.slug}`,
         });
       }
+      console.log(`[POST /api/auth/login] Invalid password for organization: ${org.id}`);
     }
 
-    return res.status(401).json({ success: false, error: "Invalid credentials" });
+    // If we get here, credentials are invalid
+    console.log(`[POST /api/auth/login] No matching credentials for: ${cleanEmail}`);
+    return res.status(401).json({ 
+      success: false, 
+      error: "Invalid email or password" 
+    });
+
   } catch (e) {
-    console.error("[login error]", e);
-    return res.status(500).json({ success: false, error: "Server error" });
+    console.error("[POST /api/auth/login] Server error:", e);
+    return res.status(500).json({ 
+      success: false, 
+      error: "Server error during login. Please try again.",
+      message: e.message 
+    });
   }
 });
 
@@ -466,6 +536,7 @@ app.post("/api/auth/logout", (_req, res) => {
 // =======================
 //     ORGANIZATIONS
 // =======================
+
 // =======================
 //     ORGANIZATIONS REGISTRATION
 // =======================
@@ -569,6 +640,47 @@ app.post("/register/organization", upload.single("logo"), async (req, res) => {
   } catch (e) {
     console.error("[org registration error]", e);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// ===================================
+app.get("/api/organizations", async (req, res) => {
+  try {
+    console.log('[GET /api/organizations] Fetching organizations list');
+    
+    const [rows] = await db.query(
+      `SELECT id, name, slug, email, address, description, access_type, logo, status
+       FROM organizations
+       WHERE status = 'active'
+       ORDER BY name ASC`
+    );
+
+    console.log(`[GET /api/organizations] Found ${rows.length} organizations`);
+
+    const items = rows.map(org => ({
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      email: org.email,
+      address: org.address,
+      description: org.description,
+      access_type: org.access_type,
+      logo: org.logo ? `${req.protocol}://${req.get("host")}${org.logo}` : null,
+      status: org.status
+    }));
+
+    return res.json({ 
+      success: true, 
+      items 
+    });
+  } catch (e) {
+    console.error("[GET /api/organizations error]", e);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch organizations",
+      items: [],
+      error: e.message 
+    });
   }
 });
 
@@ -1949,6 +2061,74 @@ app.use((req, res) => {
   res.status(404).json({ success: false, message: "Not found" });
 });
 
-app.listen(PORT, () =>
-  console.log(`Server running on http://localhost:${PORT}`)
-);
+// ==============================
+// Global error handler - must be after all routes
+app.use((err, req, res, next) => {
+  console.error('[Global Error Handler]', {
+    message: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method
+  });
+  
+  // CORS errors
+  if (err.message && err.message.includes('CORS')) {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'CORS error: Origin not allowed',
+      origin: req.headers.origin 
+    });
+  }
+  
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Invalid token' 
+    });
+  }
+  
+  // Default error
+  res.status(err.status || 500).json({ 
+    success: false, 
+    error: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+// 404 handler - must be after error handler
+app.use((req, res) => {
+  console.log('[404] Not found:', req.method, req.url);
+  res.status(404).json({ 
+    success: false, 
+    message: "Endpoint not found",
+    url: req.url 
+  });
+});
+
+
+//===========================
+const server = app.listen(PORT, () => {
+  console.log('='.repeat(50));
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔑 JWT Secret: ${JWT_SECRET ? 'SET' : 'NOT SET'}`);
+  console.log(`📂 Upload Directory: ${UPLOAD_DIR}`);
+  console.log('='.repeat(50));
+  console.log('Available endpoints:');
+  console.log('  POST /api/auth/login');
+  console.log('  GET  /api/auth/me');
+  console.log('  GET  /api/organizations');
+  console.log('  POST /api/register/user');
+  console.log('  POST /api/register/organization');
+  console.log('='.repeat(50));
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    process.exit(0);
+  });
+});

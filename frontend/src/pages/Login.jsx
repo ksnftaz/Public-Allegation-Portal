@@ -3,7 +3,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { setAuth, getToken, whoAmI, clearAuth } from "../utils/auth";
 
-const API_BASE = "/api";
+// const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -117,69 +118,77 @@ export default function Login() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage("");
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setMessage("");
 
-    // Validate all fields
-    if (!validateForm()) {
-      setMessage("⚠️ Please fix the errors before submitting");
-      return;
+  // Validate all fields
+  if (!validateForm()) {
+    setMessage("⚠️ Please fix the errors before submitting");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { 
+        "Content-Type": "application/json",
+      },
+      credentials: 'include',
+      body: JSON.stringify({ 
+        email: email.trim().toLowerCase(), 
+        password: password.trim()
+      }),
+    });
+
+    // Check if response is JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      console.error('Non-JSON response:', await response.text());
+      throw new Error("Server returned invalid response. Please try again.");
     }
 
-    setLoading(true);
+    const data = await response.json();
+    console.log('Login response:', data); // Debug log
 
-    try {
-      const res = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          email: email.trim(), 
-          password 
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("Invalid email or password");
-        } else if (res.status === 400) {
-          throw new Error("Please provide both email and password");
-        } else {
-          throw new Error(data.error || data.message || `Server error (${res.status})`);
-        }
-      }
-
-      if (data.success && data.token) {
-        setAuth({ token: data.token, userId: data.userId, orgId: data.orgId });
-        setMessage("✅ Login successful!");
-
-        // Determine redirect path
-        let redirectPath;
-        
-        if (from) {
-          // User came from a specific page (e.g., private organization), go back there
-          redirectPath = from;
-        } else if (data.userType === "organization") {
-          // Organization login - go to their page
-          redirectPath = data.redirect || `/organization/${data.slug}`;
-        } else {
-          // Regular user login - go to dashboard
-          redirectPath = data.redirect || "/user/dashboard";
-        }
-
-        setTimeout(() => navigate(redirectPath, { replace: true }), 300);
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error("Invalid email or password");
+      } else if (response.status === 400) {
+        throw new Error("Please provide both email and password");
       } else {
-        setMessage("❌ " + (data.message || "Login failed"));
+        throw new Error(data.error || data.message || `Server error (${response.status})`);
       }
-    } catch (err) {
-      setMessage("⚠️ " + (err.message || "Network error. Please try again."));
-      console.error("Login error:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (data.success && data.token) {
+      setAuth({ token: data.token, userId: data.userId, orgId: data.orgId });
+      setMessage("✅ Login successful!");
+
+      // Determine redirect path
+      let redirectPath;
+      
+      if (from) {
+        redirectPath = from;
+      } else if (data.userType === "organization") {
+        redirectPath = data.redirect || `/organization/${data.slug}`;
+      } else {
+        redirectPath = data.redirect || "/user/dashboard";
+      }
+
+      setTimeout(() => navigate(redirectPath, { replace: true }), 300);
+    } else {
+      setMessage("❌ " + (data.message || "Login failed"));
+    }
+  } catch (err) {
+    console.error("Login error:", err);
+    setMessage("⚠️ " + (err.message || "Network error. Please try again."));
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-emerald-50 via-white to-emerald-50 flex items-center justify-center p-6">

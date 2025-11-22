@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 // const API = "/api";
 const API = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 // ============= VALIDATION UTILITIES =============
 const validateEmail = (email) => {
@@ -220,15 +221,43 @@ function UserRegistration({ onBack, onSuccess, from }) {
 
   const passwordStrength = useMemo(() => validatePassword(form.password), [form.password]);
 
-  useEffect(() => {
-    fetch(`${API}/organizations`)
-      .then((r) => r.json())
-      .then((data) => {
-        const list = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
-        setOrgs(list);
-      })
-      .catch(() => setOrgs([]));
-  }, []);
+useEffect(() => {
+  const fetchOrgs = async () => {
+    try {
+      const res = await fetch(`${API}/organizations`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+      
+      if (!res.ok) {
+        console.error('Failed to fetch organizations:', res.status);
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
+      const data = await res.json();
+      console.log('Organizations response:', data); // Debug log
+      
+      const list = Array.isArray(data) 
+        ? data 
+        : Array.isArray(data?.items) 
+          ? data.items 
+          : [];
+      
+      setOrgs(list);
+    } catch (err) {
+      console.error('Organization fetch error:', err);
+      // Show user-friendly fallback
+      setOrgs([
+        { id: 'loading-error', name: 'Unable to load organizations. Please refresh.' }
+      ]);
+    }
+  };
+
+  fetchOrgs();
+}, []);
 
   const validateField = (name, value) => {
     const newErrors = { ...errors };
