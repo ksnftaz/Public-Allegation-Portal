@@ -466,7 +466,11 @@ app.post("/api/auth/logout", (_req, res) => {
 // =======================
 //     ORGANIZATIONS
 // =======================
+// =======================
+//     ORGANIZATIONS REGISTRATION
+// =======================
 
+// Legacy route (keep for backward compatibility)
 app.post("/register", upload.single("logo"), async (req, res) => {
   try {
     const { orgName, email, address, description, companyType, password } = req.body || {};
@@ -500,23 +504,41 @@ app.post("/register", upload.single("logo"), async (req, res) => {
   }
 });
 
-app.get("/api/organizations", async (req, res) => {
+// Main organization registration route (with /api prefix)
+app.post("/api/register/organization", upload.single("logo"), async (req, res) => {
   try {
-    const [rows] = await db.query(
-      "SELECT id, name, slug, access_type AS type, logo FROM organizations WHERE status='active' ORDER BY name ASC"
+    const { orgName, orgType, email, address, description, password } = req.body || {};
+    if (!orgName || !email || !address || !description || !password)
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+
+    const slug = slugify(orgName);
+    const logo = req.file ? `/uploads/${req.file.filename}` : null;
+    const accessType = orgType || "Public";
+
+    const [[byName]] = await db.query("SELECT COUNT(*) AS c FROM organizations WHERE name=?", [orgName]);
+    if (byName.c > 0)
+      return res.status(409).json({ success: false, message: "Organization name already exists" });
+
+    const [[bySlug]] = await db.query("SELECT COUNT(*) AS c FROM organizations WHERE slug=?", [slug]);
+    if (bySlug.c > 0)
+      return res.status(409).json({ success: false, message: "Slug collision, try a different name" });
+
+    const hash = await bcrypt.hash(password, 10);
+
+    await db.query(
+      `INSERT INTO organizations (name, slug, email, password, address, description, access_type, logo, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      [orgName, slug, email, hash, address, description, accessType, logo]
     );
-    const base = `${req.protocol}://${req.get("host")}`;
-    const data = rows.map(r => ({
-      ...r,
-      logo: r.logo ? `${base}${r.logo}` : null,
-    }));
-    res.json(data);
+
+    return res.json({ success: true, message: "Organization registered successfully", slug });
   } catch (e) {
-    console.error(e);
-    res.status(500).json([]);
+    console.error("[org registration error]", e);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
+// Backward compatibility route (without /api prefix)
 app.post("/register/organization", upload.single("logo"), async (req, res) => {
   try {
     const { orgName, orgType, email, address, description, password } = req.body || {};
@@ -545,46 +567,16 @@ app.post("/register/organization", upload.single("logo"), async (req, res) => {
 
     return res.json({ success: true, message: "Organization registered successfully", slug });
   } catch (e) {
-    console.error(e);
+    console.error("[org registration error]", e);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-// Also add route for user registration (if needed)
-app.post("/register/user", async (req, res) => {
-  try {
-    const { name, email, password, organizationId, address = null, description = null } = req.body || {};
-    if (!name || !email || !password || !organizationId)
-      return res.status(400).json({ success: false, message: "name, email, password, organizationId required" });
+// =======================
+//     USER REGISTRATION
+// =======================
 
-    const [orgRows] = await db.query("SELECT id FROM organizations WHERE id=?", [organizationId]);
-    if (!orgRows.length) return res.status(404).json({ success: false, message: "Organization not found" });
-
-    const [exists] = await db.query("SELECT id FROM users WHERE email=?", [email]);
-    let userId;
-    if (exists.length) {
-      userId = exists[0].id;
-    } else {
-      const hash = await bcrypt.hash(password, 10);
-      const [ins] = await db.query(
-        "INSERT INTO users (name, email, password, address, description) VALUES (?, ?, ?, ?, ?)",
-        [name, email, hash, address, description]
-      );
-      userId = ins.insertId;
-    }
-
-    await db.query(
-      "INSERT IGNORE INTO user_organizations (user_id, org_id) VALUES (?, ?)",
-      [userId, organizationId]
-    );
-
-    return res.json({ success: true, message: "User registered to organization", userId });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
-
+// Main user registration route (with /api prefix)
 app.post("/api/register/user", async (req, res) => {
   try {
     const { name, email, password, organizationId, address = null, description = null } = req.body || {};
@@ -596,8 +588,21 @@ app.post("/api/register/user", async (req, res) => {
 
     const [exists] = await db.query("SELECT id FROM users WHERE email=?", [email]);
     let userId;
+    
     if (exists.length) {
       userId = exists[0].id;
+      
+      // Check if user is banned from this organization
+      const [banned] = await db.query(
+        "SELECT 1 FROM banned_users WHERE user_id = ? AND banned_by_org = ?", 
+        [userId, organizationId]
+      );
+      if (banned.length) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "You are banned from this organization" 
+        });
+      }
     } else {
       const hash = await bcrypt.hash(password, 10);
       const [ins] = await db.query(
@@ -607,6 +612,7 @@ app.post("/api/register/user", async (req, res) => {
       userId = ins.insertId;
     }
 
+    // Link user to organization
     await db.query(
       "INSERT IGNORE INTO user_organizations (user_id, org_id) VALUES (?, ?)",
       [userId, organizationId]
@@ -614,26 +620,57 @@ app.post("/api/register/user", async (req, res) => {
 
     return res.json({ success: true, message: "User registered to organization", userId });
   } catch (e) {
-    console.error(e);
+    console.error("[user registration error]", e);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
-app.get("/api/my/organizations", auth, async (req, res) => {
+// Backward compatibility route (without /api prefix)
+app.post("/register/user", async (req, res) => {
   try {
-    if (req.user.role !== "user") return res.json([]);
-    const [rows] = await db.query(
-      `SELECT o.id, o.name, o.slug 
-         FROM user_organizations uo
-         JOIN organizations o ON o.id = uo.org_id
-        WHERE uo.user_id=? AND o.status='active'
-        ORDER BY o.name ASC`,
-      [req.user.id]
+    const { name, email, password, organizationId, address = null, description = null } = req.body || {};
+    if (!name || !email || !password || !organizationId)
+      return res.status(400).json({ success: false, message: "name, email, password, organizationId required" });
+
+    const [orgRows] = await db.query("SELECT id FROM organizations WHERE id=?", [organizationId]);
+    if (!orgRows.length) return res.status(404).json({ success: false, message: "Organization not found" });
+
+    const [exists] = await db.query("SELECT id FROM users WHERE email=?", [email]);
+    let userId;
+    
+    if (exists.length) {
+      userId = exists[0].id;
+      
+      // Check if user is banned from this organization
+      const [banned] = await db.query(
+        "SELECT 1 FROM banned_users WHERE user_id = ? AND banned_by_org = ?", 
+        [userId, organizationId]
+      );
+      if (banned.length) {
+        return res.status(403).json({ 
+          success: false, 
+          message: "You are banned from this organization" 
+        });
+      }
+    } else {
+      const hash = await bcrypt.hash(password, 10);
+      const [ins] = await db.query(
+        "INSERT INTO users (name, email, password, address, description) VALUES (?, ?, ?, ?, ?)",
+        [name, email, hash, address, description]
+      );
+      userId = ins.insertId;
+    }
+
+    // Link user to organization
+    await db.query(
+      "INSERT IGNORE INTO user_organizations (user_id, org_id) VALUES (?, ?)",
+      [userId, organizationId]
     );
-    res.json(rows);
+
+    return res.json({ success: true, message: "User registered to organization", userId });
   } catch (e) {
-    console.error(e);
-    res.status(500).json([]);
+    console.error("[user registration error]", e);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
@@ -1786,12 +1823,12 @@ app.post("/api/organizations/:slug/members/:userId/ban", auth, async (req, res) 
 
 // ──────────────────────────────────────────────────────────────────────
 //  3. Prevent re-registration of banned users
-app.post("/api/register/user", async (req, res) => {
-  // … existing code …
-  const [banned] = await db.query("SELECT 1 FROM banned_users WHERE user_id = ?", [userId]);
-  if (banned.length) return res.status(403).json({ success: false, message: "You are banned from this organization" });
-  // … continue …
-});
+// app.post("/api/register/user", async (req, res) => {
+//   // … existing code …
+//   const [banned] = await db.query("SELECT 1 FROM banned_users WHERE user_id = ?", [userId]);
+//   if (banned.length) return res.status(403).json({ success: false, message: "You are banned from this organization" });
+//   // … continue …
+// });
 
 // ──────────────────────────────────────────────────────────────────────
 //  4. Organization notifications (new table already exists)
