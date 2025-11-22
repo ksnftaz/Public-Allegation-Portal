@@ -787,6 +787,30 @@ app.post("/register/user", async (req, res) => {
   }
 });
 
+
+
+//===============================
+app.get("/api/my/organizations", auth, async (req, res) => {
+  try {
+    if (req.user.role !== "user") {
+      return res.status(403).json({ success: false, message: "Only users can access this" });
+    }
+
+    const [rows] = await db.query(
+      `SELECT o.id, o.name, o.slug
+       FROM user_organizations uo
+       JOIN organizations o ON o.id = uo.org_id
+       WHERE uo.user_id = ?
+       ORDER BY uo.createdAt ASC`,
+      [req.user.id]
+    );
+
+    return res.json(rows);
+  } catch (e) {
+    console.error("[my organizations error]", e);
+    return res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 // =======================
 //   ORG DETAILS + FEED
 // =======================
