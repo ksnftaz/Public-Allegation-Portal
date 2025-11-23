@@ -126,7 +126,7 @@ export default function Browse_organizations() {
                 <ShieldCheck size={28} className="text-green-700" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Browse Organizations</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Browse All Organizations</h1>
                 <p className="text-sm text-gray-600">Discover public and private organizations</p>
               </div>
             </div>
